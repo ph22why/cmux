@@ -121,7 +121,15 @@ class Session:
         """Opens a Chromium page in `pane` (selected) and checks debug.cef; raises when it is not Chromium."""
         workspace = self.stress.focused_workspace()
         self.stress.add_tab(workspace, pane, "chromium")
-        problems = self.stress_module.cef_problems(self.app.rpc("debug.cef"), self.stress_module.WEB_DEV_CONFIG)
+        cef = self.app.rpc("debug.cef")
+        problems = self.stress_module.cef_problems(cef, self.stress_module.WEB_DEV_CONFIG)
+        # SCRATCH DIAGNOSTIC: where the page went.
+        for delay in (0, 3, 10):
+            time.sleep(delay)
+            c = self.app.rpc("debug.cef") or {}
+            print("  CEFDIAG +%ss spare=%s devtools=%s windows=%s tabs=%s focus=%s pane=%s" % (
+                delay, c.get("spare_window"), json.dumps(c.get("devtools"))[:1500], json.dumps(c.get("windows"))[:800],
+                json.dumps(self.stress.tabs(workspace, pane))[:800], json.dumps(self.stress.topology().get("focus"))[:200], pane), flush=True)
         if problems:
             raise RuntimeError(f"the page is not Chromium: {problems}")
         return problems
