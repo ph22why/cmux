@@ -153,6 +153,9 @@ class Session:
         return delivered
 
 
+LAUNCHED = 0.0
+
+
 def pan_round(app, name, mode, index, session, point):
     """One pan at `point`: with Command (`command`), or plain under `layout.scrollModifier: none` (`base`).
     Returns the round's record."""
@@ -163,7 +166,21 @@ def pan_round(app, name, mode, index, session, point):
     delivered = session.gesture(point, dx, command=mode == "command")
     time.sleep(opts.settle)  # bench harness: the frames run until the strip's spring rests
     window = (started, uptime())
-    frames = app.rpc("debug.frames", {"action": "stop"}) or {}
+    frames = app.rpc("debug.frames", {"action": "stop", "raw": True}) or {}
+    # SCRATCH DIAGNOSTIC: each missed frame's main-thread busy time and layout passes.
+    ivs, mains = frames.pop("intervals_ms", None) or [], frames.pop("main_ms", None) or []
+    vls, wls = frames.pop("view_layouts_per_frame", None) or [], frames.pop("window_layouts_per_frame", None) or []
+    limit = 1.5 * (frames.get("refresh_ms") or 8.33)
+    detail, at = [], 0.0
+    for i, iv in enumerate(ivs):
+        at += iv
+        if iv > limit:
+            detail.append([round(at), round(iv, 1), round(mains[i], 1) if i < len(mains) else None,
+                           vls[i] if i < len(vls) else None, wls[i] if i < len(wls) else None])
+    busy_missed = sum(1 for d in detail if d[2] is not None and d[2] > (frames.get("refresh_ms") or 8.33))
+    print(f"  DIAG {name} {mode} #{index}: missed {len(detail)} main-busy {busy_missed} main_max {frames.get('main_max_ms')} "
+          f"main_total {frames.get('main_total_ms')} view_layouts {frames.get('view_layouts')} window_layouts {frames.get('window_layouts')} "
+          f"t_launch {round(uptime() - LAUNCHED, 1)} detail[at,iv,main,vl,wl] {detail[:30]}", flush=True)
     # The main-thread stalls of the pan (over the hang threshold): the longest one's stack says what a long frame was.
     hangs = app.rpc("debug.hangs", {"limit": 8}) or {}
     stalls = sorted(hangs.get("hangs") or [], key=lambda h: -(h.get("duration_ms") or 0)) if isinstance(hangs, dict) else []
@@ -341,6 +358,8 @@ def main():
     stress_module = load_stress()
     try:
         app.launch(timeout=180)
+        global LAUNCHED
+        LAUNCHED = uptime()
         session = Session(app, stress_module)
         for name in opts.sessions.split(","):
             if name == "stress":
