@@ -161,9 +161,26 @@ def pan_round(app, name, mode, index, session, point):
     Returns the round's record."""
     dx = opts.dx if index % 2 == 0 else -opts.dx
     app.rpc("debug.hangs", {"clear": True})
+    app.rpc("debug.layers", {"reset": True})
     app.rpc("debug.frames", {"action": "start"})
     started = uptime()
+    sampler = None
+    if index in (2, 3):  # SCRATCH: a main-thread sample over the gesture
+        import subprocess
+        sampler = subprocess.Popen(["/usr/bin/sample", str(app.process.pid), "2", "1", "-mayDie", "-file",
+                                    os.path.join(opts.out, f"sample-{mode}-{index}.txt")],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     delivered = session.gesture(point, dx, command=mode == "command")
+    if sampler:
+        sampler.wait(timeout=30)
+        try:
+            text = open(os.path.join(opts.out, f"sample-{mode}-{index}.txt")).read()
+            start = text.find("Thread_")
+            print(f"  SAMPLE {mode} #{index}:\n" + "\n".join(l for l in text[start:].splitlines()[:260]), flush=True)
+        except OSError as error:
+            print(f"  SAMPLE {mode} #{index}: {error}", flush=True)
+    layers = app.rpc("debug.layers") or {}
+    print(f"  LAYOUTS {mode} #{index}: {json.dumps((layers.get('layout_passes') or {}).get('top_classes'))[:1200]}", flush=True)
     time.sleep(opts.settle)  # bench harness: the frames run until the strip's spring rests
     window = (started, uptime())
     frames = app.rpc("debug.frames", {"action": "stop", "raw": True}) or {}
