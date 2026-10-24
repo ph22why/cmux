@@ -69,7 +69,13 @@ extension DebugMouse {
         let screenPoint = window.convertPoint(toScreen: mainPoint)
         guard let page = WindowOverlayHost.frontPageWindow(at: screenPoint, in: window), let content = page.contentView,
               let frame = content.superview else {
-            return .object(["error": .string("no Chromium page window under the point")])
+            // SCRATCH DIAGNOSTIC (not for landing): what child windows were there.
+            let kids = (window.childWindows ?? []).map { c in
+                "\(type(of: c))/vis=\(c.isVisible)/page=\(WindowOverlayHost.isPageWindow(c))/f=\(Int(c.frame.minX)),\(Int(c.frame.minY)),\(Int(c.frame.width)),\(Int(c.frame.height))"
+            }.joined(separator: ";")
+            let pane = controller.focus.state.pane ?? "-"
+            let viaPane = DebugKey.pageWindow(of: pane, in: controller).map { "\(Int($0.frame.minX)),\(Int($0.frame.minY))" } ?? "nil"
+            return .object(["error": .string("no page: sp=\(Int(screenPoint.x)),\(Int(screenPoint.y)) wf=\(Int(window.frame.minX)),\(Int(window.frame.minY)),\(Int(window.frame.width)),\(Int(window.frame.height)) viaPane=\(viaPane) kids=[\(kids)]")])
         }
         let location = page.convertPoint(fromScreen: screenPoint)
         let flags = modifiers(params["modifiers"]?.arrayValue ?? [])
