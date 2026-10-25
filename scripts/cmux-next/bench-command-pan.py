@@ -120,7 +120,11 @@ class Session:
     def chromium_page(self, pane):
         """Opens a Chromium page in `pane` (selected) and checks debug.cef; raises when it is not Chromium."""
         workspace = self.stress.focused_workspace()
-        self.stress.add_tab(workspace, pane, "chromium")
+        url = self.stress.pages.url()
+        reply = self.stress.action("openBrowser.chromium", {"url": url}, target=f"pane:{pane}")
+        print("  OPENDIAG url=%s reply=%s refusals=%s" % (url, json.dumps(reply)[:800], self.stress.refusals[-3:]), flush=True)
+        time.sleep(3)
+        print("  OPENDIAG tabs=%s" % json.dumps(self.stress.tabs(workspace, pane))[:600], flush=True)
         cef = self.app.rpc("debug.cef")
         problems = self.stress_module.cef_problems(cef, self.stress_module.WEB_DEV_CONFIG)
         # SCRATCH DIAGNOSTIC: where the page went.
